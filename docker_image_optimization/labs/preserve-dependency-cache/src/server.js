@@ -1,5 +1,6 @@
 "use strict";
 
+// cache-invalidation experiment: second source-only comment change (Dockerfile.cached)
 const http = require("http");
 const { healthPayload } = require("message-format");
 
