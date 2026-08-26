@@ -2,13 +2,14 @@
 
 | Candidate | Size in bytes | Runtime result | Notes |
 |---|---:|---|---|
-| Ubuntu 24.04 | | | |
-| Debian 12 slim | | | |
-| Alpine 3.22 | | | |
+| Ubuntu 24.04 | 29756419 | `{"runtime":"posix-shell","status":"ok"}` | glibc-based, ships apt/dpkg, largest candidate |
+| Debian 12 slim | 28235697 | `{"runtime":"posix-shell","status":"ok"}` | glibc-based, ships apt/dpkg, slightly smaller than Ubuntu but still ~28MB |
+| Alpine 3.22 | 3790782 | `{"runtime":"posix-shell","status":"ok"}` | musl-based, busybox `/bin/sh`, roughly 8x smaller than the others |
 
 ## Selected Base
 
-- Selection:
-- Compatibility evidence:
-- Why this is not a universal choice:
-- Version tag versus digest:
+- Selection: `alpine:3.22`, used in `Dockerfile.selected` (`base-lab:selected`, 3790934 bytes with the added `USER 65532:65532` layer).
+- Compatibility evidence: all three candidates print the identical `{"runtime":"posix-shell","status":"ok"}` from the same `hello.sh`, proving `hello.sh` needs nothing beyond a POSIX `/bin/sh` — no bash-only syntax, no glibc-linked binary. `runtime-requirements.md` explicitly rules out any `glibc`-specific native extension, any post-build package-manager operation, and any interactive-debug-shell requirement, and requires a non-root configured user — Alpine's musl-based BusyBox `/bin/sh` satisfies the POSIX-shell requirement with none of the glibc/toolchain weight Ubuntu and Debian slim carry, and `USER 65532:65532` in `Dockerfile.selected` satisfies the non-root requirement. Alpine is also the smallest of the three candidates that all pass the same runtime check, so it is the correct choice per "choose the smallest provided candidate that satisfies all requirements."
+- Why this is not a universal choice: Alpine's musl libc is not ABI-compatible with glibc, so any application that dynamically links against glibc, ships prebuilt glibc binaries, or depends on glibc-specific behavior (locale handling, NSS modules, certain Python/Node native wheels compiled against glibc) will fail or behave differently on Alpine. `runtime-requirements.md` calls this out directly: "Do not assume the same choice is correct for an application that requires glibc or a vendor-supported Debian package."
+- One situation where Debian slim would be safer than Alpine despite being larger: an application that needs a glibc-compiled native dependency (e.g., a Python wheel with compiled C extensions that only ships `manylinux`/glibc wheels, or a vendor-distributed `.deb`-packaged agent/driver with no musl build) will either fail to run or silently misbehave on Alpine. Debian slim keeps glibc and apt/dpkg compatibility while still being far smaller than the full Ubuntu image, so it is the safer choice whenever a dependency's compatibility is only validated against glibc/Debian-family userlands.
+- Version tag versus digest: a versioned tag like `alpine:3.22` is human-readable and lets a team consciously control upgrades — pin to a minor line, and rebuilds still pick up 3.22.x patch releases without an explicit Dockerfile change. But a tag is mutable: the registry can repoint `alpine:3.22` to a different underlying image (a re-push, a registry migration, or a supply-chain compromise), so two builds of the same Dockerfile on different days are not guaranteed to pull byte-identical content. A digest reference (`alpine:3.22@sha256:...`) is immutable — it names one exact, content-addressed image and cannot be silently repointed, which is what "immutable base reference" requires. In practice, versioned tags are used for day-to-day development control and readability, while digests are used when a build must be reproducible and verifiably identical every time (e.g., pinned in CI/production).
