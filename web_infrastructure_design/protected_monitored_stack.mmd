@@ -1,0 +1,59 @@
+flowchart LR
+    User["User"]
+    Domain["www.foobar.com"]
+    DNS["DNS"]
+    FW0["Firewall"]
+    LB["Load balancer (HAProxy)"]
+    FW1["Firewall"]
+    FW2["Firewall"]
+    Mon["Monitoring system"]
+
+    subgraph Node1["Web/App node 1"]
+        direction LR
+        Web1["Web server (Nginx)"]
+        App1["Application server"]
+        Web1 --> App1
+    end
+
+    subgraph Node2["Web/App node 2"]
+        direction LR
+        Web2["Web server (Nginx)"]
+        App2["Application server"]
+        Web2 --> App2
+    end
+
+    DBP[("Database primary (MySQL)")]
+    DBR[("Database replica (MySQL)")]
+
+    User -->|"1: request"| Domain
+    Domain -->|"2: name lookup"| DNS
+    DNS -->|"A record &rarr; 8.8.8.8"| FW0
+    User -->|"HTTPS"| FW0
+
+    FW0 --> LB
+    LB --> FW1
+    LB --> FW2
+    FW1 --> Web1
+    FW2 --> Web2
+
+    App1 --> DBP
+    App2 --> DBP
+    DBP -->|"replication"| DBR
+
+    DBP -.->|"response"| App1
+    DBP -.->|"response"| App2
+    App1 -.->|"response"| Web1
+    App2 -.->|"response"| Web2
+    Web1 -.->|"response"| FW1
+    Web2 -.->|"response"| FW2
+    FW1 -.->|"response"| LB
+    FW2 -.->|"response"| LB
+    LB -.->|"response"| FW0
+    FW0 -.->|"response"| User
+
+    LB -.->|"metrics"| Mon
+    Web1 -.->|"QPS metrics"| Mon
+    Web2 -.->|"metrics"| Mon
+    App1 -.->|"metrics"| Mon
+    App2 -.->|"metrics"| Mon
+    DBP -.->|"metrics"| Mon

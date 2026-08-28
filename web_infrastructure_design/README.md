@@ -1,15 +1,10 @@
-# web_infrastructure_design
+# Web Infrastructure Design
 
-Four progressively more complex designs of the infrastructure behind `www.foobar.com`, moving from everything on a single machine to a redundant, protected, and finally fully tiered multi-server system. Each task has a matching `.mmd` Mermaid file, reproduced inline below so the diagrams render directly on GitHub — the `.mmd` file itself is always the source of truth. The notes under each diagram cover the concept it introduces: DNS, redundancy, firewalls/HTTPS, monitoring, and tiering.
-
-## Diagrams
-
-| File | Design |
-|---|---|
-| [`single_server_stack.mmd`](./single_server_stack.mmd) | Everything (web, app, database) on one machine — the baseline, with no redundancy. |
-| [`redundant_web_tier.mmd`](./redundant_web_tier.mmd) | Adds a load balancer and a second active web/app node, plus a database replica. |
-| [`protected_monitored_stack.mmd`](./protected_monitored_stack.mmd) | Adds firewalls, HTTPS, and a monitoring system collecting metrics from every component. |
-| [`separated_tiers.mmd`](./separated_tiers.mmd) | Splits web, application, and database into independent, redundant tiers with a failover load-balancer pair. |
+Four progressively more complex designs of the infrastructure behind
+`www.foobar.com`, from a single server to a tiered, redundant, monitored
+system. Each task has a matching `.mmd` Mermaid file. The diagrams are
+reproduced inline below so they render directly on GitHub; the source of
+truth is the `.mmd` file.
 
 ---
 
@@ -363,110 +358,3 @@ web-server capacity) or maintaining one of them without disturbing the
 other is harder — a change or restart to one service risks affecting
 the other service sharing the same machine.
 
----
-
-## 3. Separate Tiers and Remove the Load-Balancer SPOF
-
-File: [`separated_tiers.mmd`](./separated_tiers.mmd)
-
-```mermaid
-flowchart LR
-    User["User"]
-    Domain["www.foobar.com"]
-    DNS["DNS"]
-    LB1["Load balancer (HAProxy)"]
-    LB2["Load balancer (HAProxy)"]
-
-    User -->|"1: request"| Domain
-    Domain -->|"2: name lookup"| DNS
-    DNS -->|"A record &rarr; 8.8.8.8"| LB1
-    LB1 <-->|"failover"| LB2
-
-    subgraph WebTier["Web tier"]
-        direction LR
-        Web1["Web server (Nginx)"]
-        Web2["Web server (Nginx)"]
-    end
-
-    subgraph AppTier["Application tier"]
-        direction LR
-        App1["Application server"]
-        App2["Application server"]
-    end
-
-    subgraph DBTier["Database tier"]
-        direction LR
-        DBP[("Database primary (MySQL)")]
-        DBR[("Database replica (MySQL)")]
-    end
-
-    LB1 -->|"distribute"| Web1
-    LB1 -->|"distribute"| Web2
-    Web1 --> App1
-    Web2 --> App2
-    App1 --> DBP
-    App2 --> DBP
-    DBP -->|"replication"| DBR
-
-    DBP -.->|"response"| App1
-    DBP -.->|"response"| App2
-    App1 -.->|"response"| Web1
-    App2 -.->|"response"| Web2
-    Web1 -.->|"response"| LB1
-    Web2 -.->|"response"| LB1
-    LB1 -.->|"response"| User
-```
-
-### Comparison with the single-server design
-
-The single-server design ran the web server, application server,
-application code, and database as processes on one machine — one thing
-to fail, one thing to maintain, one thing to run out of capacity. Here
-the same responsibilities are spread across a **web tier**, an
-**application tier**, and a **database tier** of dedicated machines,
-each fronted by a load-balancer pair that itself has a `failover`
-partner, so no single machine failure removes an entire capability from
-the system the way it did in task 0.
-
-### Independent scaling
-
-Because the web tier, application tier, and database tier are now
-separate groups of machines rather than colocated services, each tier
-can be scaled on its own: if application logic is the bottleneck, more
-application servers can be added without touching the web or database
-tier, and vice versa. Scaling is driven by which tier is actually
-constrained, not by an all-or-nothing copy of the whole stack.
-
-### Maintenance isolation
-
-Taking a machine in one tier out for maintenance — patching a web
-server, for instance — no longer risks the application or database
-tier, since they run on physically and logically separate machines with
-their own remaining redundant instances. The blast radius of a
-maintenance operation is limited to the tier (and ideally just the one
-instance) being worked on.
-
-### Sizing instance counts
-
-The number of web-server, application-server, or database instances in
-a tier should be set from **measured demand** (current traffic and
-resource usage), **expected growth** (how much that demand is likely to
-increase), **failure tolerance** (how many instances can be lost at once
-and still meet demand), and a **justified safety margin** on top of
-that — not copied from how many boxes happen to appear in a diagram, and
-not simply maximized "to be safe," since every extra instance adds real
-infrastructure and operational cost without a guaranteed benefit.
-
-### Remaining limitation
-
-Database **failover is still not automatic**: the primary is still the
-only writable node, and promoting the replica if the primary fails would
-require a separate, deliberate mechanism that this design does not
-include. Separating tiers and pairing the load balancer also adds more
-machines to provision, configure, and operate, which increases cost and
-operational complexity compared to every earlier design in this
-project.
-
----
-
-📚 See the root [CHEATSHEET.md](../CHEATSHEET.md) for the concepts used here.
