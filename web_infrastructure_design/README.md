@@ -1,10 +1,15 @@
-# Web Infrastructure Design
+# web_infrastructure_design
 
-Four progressively more complex designs of the infrastructure behind
-`www.foobar.com`, from a single server to a tiered, redundant, monitored
-system. Each task has a matching `.mmd` Mermaid file. The diagrams are
-reproduced inline below so they render directly on GitHub; the source of
-truth is the `.mmd` file.
+Four progressively more complex designs of the infrastructure behind `www.foobar.com`, moving from everything on a single machine to a redundant, protected, and finally fully tiered multi-server system. Each task has a matching `.mmd` Mermaid file, reproduced inline below so the diagrams render directly on GitHub — the `.mmd` file itself is always the source of truth. The notes under each diagram cover the concept it introduces: DNS, redundancy, firewalls/HTTPS, monitoring, and tiering.
+
+## Diagrams
+
+| File | Design |
+|---|---|
+| [`single_server_stack.mmd`](./single_server_stack.mmd) | Everything (web, app, database) on one machine — the baseline, with no redundancy. |
+| [`redundant_web_tier.mmd`](./redundant_web_tier.mmd) | Adds a load balancer and a second active web/app node, plus a database replica. |
+| [`protected_monitored_stack.mmd`](./protected_monitored_stack.mmd) | Adds firewalls, HTTPS, and a monitoring system collecting metrics from every component. |
+| [`separated_tiers.mmd`](./separated_tiers.mmd) | Splits web, application, and database into independent, redundant tiers with a failover load-balancer pair. |
 
 ---
 
@@ -228,3 +233,240 @@ with a real cost: more servers to provision, patch, and pay for, and
 more moving parts (load-balancer configuration, replication) to operate
 and monitor.
 
+---
+
+## 2. Add Protection and Observability
+
+File: [`protected_monitored_stack.mmd`](./protected_monitored_stack.mmd)
+
+```mermaid
+flowchart LR
+    User["User"]
+    Domain["www.foobar.com"]
+    DNS["DNS"]
+    FW0["Firewall"]
+    LB["Load balancer (HAProxy)"]
+    FW1["Firewall"]
+    FW2["Firewall"]
+    Mon["Monitoring system"]
+
+    subgraph Node1["Web/App node 1"]
+        direction LR
+        Web1["Web server (Nginx)"]
+        App1["Application server"]
+        Web1 --> App1
+    end
+
+    subgraph Node2["Web/App node 2"]
+        direction LR
+        Web2["Web server (Nginx)"]
+        App2["Application server"]
+        Web2 --> App2
+    end
+
+    DBP[("Database primary (MySQL)")]
+    DBR[("Database replica (MySQL)")]
+
+    User -->|"1: request"| Domain
+    Domain -->|"2: name lookup"| DNS
+    DNS -->|"A record &rarr; 8.8.8.8"| FW0
+    User -->|"HTTPS"| FW0
+
+    FW0 --> LB
+    LB --> FW1
+    LB --> FW2
+    FW1 --> Web1
+    FW2 --> Web2
+
+    App1 --> DBP
+    App2 --> DBP
+    DBP -->|"replication"| DBR
+
+    DBP -.->|"response"| App1
+    DBP -.->|"response"| App2
+    App1 -.->|"response"| Web1
+    App2 -.->|"response"| Web2
+    Web1 -.->|"response"| FW1
+    Web2 -.->|"response"| FW2
+    FW1 -.->|"response"| LB
+    FW2 -.->|"response"| LB
+    LB -.->|"response"| FW0
+    FW0 -.->|"response"| User
+
+    LB -.->|"metrics"| Mon
+    Web1 -.->|"QPS metrics"| Mon
+    Web2 -.->|"metrics"| Mon
+    App1 -.->|"metrics"| Mon
+    App2 -.->|"metrics"| Mon
+    DBP -.->|"metrics"| Mon
+```
+
+### What a firewall does and does not do
+
+A **firewall** inspects traffic at the network/transport level and
+allows or blocks it based on rules such as source, destination, and
+port. It does **not** inspect or understand the content of an
+application request, authenticate users, encrypt traffic, or protect
+against a vulnerability in the application code itself — it only decides
+whether a connection is allowed to reach the component behind it.
+
+### Why HTTPS
+
+**HTTPS** wraps the HTTP traffic between the user and the entry firewall
+in TLS encryption, so the request and response cannot be read or altered
+by anyone intercepting the connection in transit. It also lets the user
+verify they are actually talking to `www.foobar.com` and not an
+impostor.
+
+### How monitoring collects data
+
+Each monitored component (load balancer, web servers, application
+servers, database primary) runs a small **monitoring client or agent**
+that periodically reads local metrics (requests handled, response
+times, resource usage, query counts, etc.) and pushes or exposes them so
+the **monitoring system** can pull or receive that data over the
+network, independent of the user traffic flowing through the stack.
+
+### QPS
+
+**QPS (queries per second)** measures how many requests a component
+handles each second. Tracking QPS over time makes it possible to see
+traffic climbing before it becomes a problem, spot sudden spikes or
+drops that indicate an incident, and judge whether current capacity is
+close to its limit.
+
+### TLS termination at the load balancer
+
+If TLS is terminated at the load balancer, the connection from the user
+is encrypted only as far as the load balancer. Unless the load balancer
+re-encrypts traffic for the next hop, the connection from the load
+balancer onward to the firewalls, web servers, and application servers
+travels **unencrypted** on the internal network — a real exposure if
+that internal network cannot be fully trusted.
+
+### The writable primary as a risk
+
+Even with a load balancer, firewalls, and monitoring in place, there is
+still exactly **one** database node that accepts writes — the primary.
+None of the added components change that: if the primary becomes
+unreachable, the application loses the ability to write data regardless
+of how much read-side or network redundancy exists elsewhere.
+
+### Collocated services and independent scaling/maintenance
+
+Within each `Web/App node`, the web server and application server still
+sit on the same machine as each other, and the database is a separate
+but singular pair of machines. Because these services are collocated
+rather than deployed as independently addressable tiers, scaling one of
+them (e.g. adding more application-server capacity without adding more
+web-server capacity) or maintaining one of them without disturbing the
+other is harder — a change or restart to one service risks affecting
+the other service sharing the same machine.
+
+---
+
+## 3. Separate Tiers and Remove the Load-Balancer SPOF
+
+File: [`separated_tiers.mmd`](./separated_tiers.mmd)
+
+```mermaid
+flowchart LR
+    User["User"]
+    Domain["www.foobar.com"]
+    DNS["DNS"]
+    LB1["Load balancer (HAProxy)"]
+    LB2["Load balancer (HAProxy)"]
+
+    User -->|"1: request"| Domain
+    Domain -->|"2: name lookup"| DNS
+    DNS -->|"A record &rarr; 8.8.8.8"| LB1
+    LB1 <-->|"failover"| LB2
+
+    subgraph WebTier["Web tier"]
+        direction LR
+        Web1["Web server (Nginx)"]
+        Web2["Web server (Nginx)"]
+    end
+
+    subgraph AppTier["Application tier"]
+        direction LR
+        App1["Application server"]
+        App2["Application server"]
+    end
+
+    subgraph DBTier["Database tier"]
+        direction LR
+        DBP[("Database primary (MySQL)")]
+        DBR[("Database replica (MySQL)")]
+    end
+
+    LB1 -->|"distribute"| Web1
+    LB1 -->|"distribute"| Web2
+    Web1 --> App1
+    Web2 --> App2
+    App1 --> DBP
+    App2 --> DBP
+    DBP -->|"replication"| DBR
+
+    DBP -.->|"response"| App1
+    DBP -.->|"response"| App2
+    App1 -.->|"response"| Web1
+    App2 -.->|"response"| Web2
+    Web1 -.->|"response"| LB1
+    Web2 -.->|"response"| LB1
+    LB1 -.->|"response"| User
+```
+
+### Comparison with the single-server design
+
+The single-server design ran the web server, application server,
+application code, and database as processes on one machine — one thing
+to fail, one thing to maintain, one thing to run out of capacity. Here
+the same responsibilities are spread across a **web tier**, an
+**application tier**, and a **database tier** of dedicated machines,
+each fronted by a load-balancer pair that itself has a `failover`
+partner, so no single machine failure removes an entire capability from
+the system the way it did in task 0.
+
+### Independent scaling
+
+Because the web tier, application tier, and database tier are now
+separate groups of machines rather than colocated services, each tier
+can be scaled on its own: if application logic is the bottleneck, more
+application servers can be added without touching the web or database
+tier, and vice versa. Scaling is driven by which tier is actually
+constrained, not by an all-or-nothing copy of the whole stack.
+
+### Maintenance isolation
+
+Taking a machine in one tier out for maintenance — patching a web
+server, for instance — no longer risks the application or database
+tier, since they run on physically and logically separate machines with
+their own remaining redundant instances. The blast radius of a
+maintenance operation is limited to the tier (and ideally just the one
+instance) being worked on.
+
+### Sizing instance counts
+
+The number of web-server, application-server, or database instances in
+a tier should be set from **measured demand** (current traffic and
+resource usage), **expected growth** (how much that demand is likely to
+increase), **failure tolerance** (how many instances can be lost at once
+and still meet demand), and a **justified safety margin** on top of
+that — not copied from how many boxes happen to appear in a diagram, and
+not simply maximized "to be safe," since every extra instance adds real
+infrastructure and operational cost without a guaranteed benefit.
+
+### Remaining limitation
+
+Database **failover is still not automatic**: the primary is still the
+only writable node, and promoting the replica if the primary fails would
+require a separate, deliberate mechanism that this design does not
+include. Separating tiers and pairing the load balancer also adds more
+machines to provision, configure, and operate, which increases cost and
+operational complexity compared to every earlier design in this
+project.
+
+---
+
+📚 See the root [CHEATSHEET.md](../CHEATSHEET.md) for the concepts used here.

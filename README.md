@@ -26,16 +26,7 @@ This repo covers three core DevOps building blocks: shrinking and hardening Dock
 
 ## 🧠 Cheat Sheet
 
-- **Docker layer caching** — Docker reuses unchanged steps from a previous build instead of redoing them. Like reheating yesterday's soup instead of cooking it from scratch — only the parts you actually changed get remade.
-- **Multi-stage builds** — One Dockerfile stage compiles the app with all its build tools, then a second, minimal stage copies over only the finished binary. Like a construction site handing over the finished house while the scaffolding, cement mixer, and sawdust stay behind at the yard.
-- **`.dockerignore`** — A list of files and folders excluded from the build context sent to the Docker daemon (`.git`, logs, local secrets, big local-only data). Like leaving your junk drawer out when you photograph a room for a listing — it never needed to be in the picture.
-- **Layer immutability & "whiteout" deletes** — Once a layer is committed, its bytes are baked in forever; deleting a file in a later `RUN` only hides it, it doesn't shrink the image. Like shredding a document after mailing a copy — the copy already left the building, no matter what you do to the original.
-- **Collapsing RUN steps** — Combining create/use/delete into one `RUN` instruction means only the final state is ever committed to a layer. Like packing and unpacking a suitcase in a single motion so the mess never actually gets photographed.
-- **Base image selection** — Choosing the smallest base image (e.g. Alpine over Debian/Ubuntu) that still satisfies real runtime requirements like glibc compatibility. Like picking the smallest toolbox that still has every tool the job actually needs, instead of hauling the whole garage.
-- **Image tag vs. digest** — A tag (`alpine:3.22`) is a movable label that can be repointed; a digest (`@sha256:...`) pins one exact, immutable image. Like the difference between "meet me at the coffee shop" (which could change owners) and a GPS coordinate that never moves.
-- **Linux network inspection (`ip`, `ss`, `getent`, `ping`)** — Commands that read a host's own interfaces, routes, neighbors, open ports, and name resolution without touching any remote service. Like checking your own home's fuse box, doorbell, and mailbox before ever calling a neighbor.
-- **Load balancing & redundancy** — Spreading traffic across multiple identical servers (e.g. round robin) so no single machine is a single point of failure. Like a restaurant with several cash registers open at once instead of forcing every customer through one line.
-- **Tiered web architecture (web / app / database)** — Splitting a stack into independently scalable layers, each fronted by redundancy, instead of running everything on one box. Like a restaurant separating the dining room, kitchen, and pantry so each can be staffed and expanded on its own schedule.
+All the key concepts from this repo, explained with analogies → **[CHEATSHEET.md](CHEATSHEET.md)**
 
 ## 📬 Contact
 
