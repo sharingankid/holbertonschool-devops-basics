@@ -1,0 +1,25 @@
+flowchart LR
+    User["User"]
+    Domain["www.foobar.com"]
+    DNS["DNS"]
+
+    subgraph Server["Server (single machine)"]
+        direction LR
+        Web["Web server (Nginx)"]
+        App["Application server"]
+        Code["Application code"]
+        DB[("Database (PotsgreSQL/MySQL)")]
+
+        Web --> App
+        App --> Code
+        Code --> DB
+    end
+
+    User -->|"1: request"| Domain
+    Domain -->|"2: name lookup"| DNS
+    DNS -->|"A record &rarr; 8.8.8.8"| Web
+
+    DB -.->|"6: result"| Code
+    Code -.->|"5: response"| App
+    App -.->|"4: response"| Web
+    Web -.->|"3: response"| User
