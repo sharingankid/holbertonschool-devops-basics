@@ -1,0 +1,45 @@
+flowchart LR
+    User["User"]
+    Domain["www.foobar.com"]
+    DNS["DNS"]
+    LB1["Load balancer (HAProxy)"]
+    LB2["Load balancer (HAProxy)"]
+
+    User -->|"1: request"| Domain
+    Domain -->|"2: name lookup"| DNS
+    DNS -->|"A record &rarr; 8.8.8.8"| LB1
+    LB1 <-->|"failover"| LB2
+
+    subgraph WebTier["Web tier"]
+        direction LR
+        Web1["Web server (Nginx)"]
+        Web2["Web server (Nginx)"]
+    end
+
+    subgraph AppTier["Application tier"]
+        direction LR
+        App1["Application server"]
+        App2["Application server"]
+    end
+
+    subgraph DBTier["Database tier"]
+        direction LR
+        DBP[("Database primary (MySQL)")]
+        DBR[("Database replica (MySQL)")]
+    end
+
+    LB1 -->|"distribute"| Web1
+    LB1 -->|"distribute"| Web2
+    Web1 --> App1
+    Web2 --> App2
+    App1 --> DBP
+    App2 --> DBP
+    DBP -->|"replication"| DBR
+
+    DBP -.->|"response"| App1
+    DBP -.->|"response"| App2
+    App1 -.->|"response"| Web1
+    App2 -.->|"response"| Web2
+    Web1 -.->|"response"| LB1
+    Web2 -.->|"response"| LB1
+    LB1 -.->|"response"| User
