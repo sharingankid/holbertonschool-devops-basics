@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: taskflow
+      POSTGRES_PASSWORD: taskflow_dev
+      POSTGRES_DB: taskflow
+
+  app:
+    build: .
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: taskflow
+      PGPASSWORD: taskflow_dev
+      PGDATABASE: taskflow
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
