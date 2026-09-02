@@ -2,19 +2,34 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: taskflow
-      POSTGRES_PASSWORD: taskflow_dev
-      POSTGRES_DB: taskflow
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db:/docker-entrypoint-initdb.d:ro
+    networks:
+      - backend
 
   app:
     build: .
     environment:
       PGHOST: db
       PGPORT: 5432
-      PGUSER: taskflow
-      PGPASSWORD: taskflow_dev
-      PGDATABASE: taskflow
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
     ports:
       - "3000:3000"
+    networks:
+      - frontend
+      - backend
     depends_on:
       - db
+
+networks:
+  frontend:
+  backend:
+
+volumes:
+  pgdata:
