@@ -1,0 +1,59 @@
+{
+  "name": "hbtn-devops-taskflow-node",
+  "version": "1.0.0",
+  "description": "TaskFlow API — a small Express + PostgreSQL service used as the starter application for the DevOps container, Compose and load-balancing projects.",
+  "main": "src/server.js",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "npm run test:unit",
+    "test:unit": "jest --testNamePattern=\"^unit\"",
+    "test:integration": "jest --testNamePattern=\"^integration\" --runInBand",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "express": "4.22.2",
+    "pg": "8.13.1"
+  },
+  "devDependencies": {
+    "eslint": "8.57.1",
+    "jest": "29.7.0",
+    "prettier": "3.4.2",
+    "supertest": "7.0.0"
+  },
+  "eslintConfig": {
+    "root": true,
+    "env": {
+      "node": true,
+      "es2022": true,
+      "jest": true
+    },
+    "parserOptions": {
+      "ecmaVersion": 2022,
+      "sourceType": "script"
+    },
+    "extends": "eslint:recommended",
+    "rules": {
+      "no-unused-vars": [
+        "error",
+        {
+          "argsIgnorePattern": "^_|^req$|^next$"
+        }
+      ]
+    }
+  },
+  "prettier": {
+    "printWidth": 90,
+    "singleQuote": true
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/src/**/*.test.js"
+    ]
+  }
+}
