@@ -26,7 +26,7 @@ This repo covers three core DevOps building blocks: shrinking and hardening Dock
 
 ## 🧠 Cheat Sheet
 
-All the key concepts from this repo, explained with analogies → **[CHEATSHEET.md](CHEATSHEET.md)**
+All the key concepts from this repo, explained with analogies → **[CHEATSHEET.md](CHEATSHEET.md)** ([🇫🇷 version française](CHEATSHEET.fr.md))
 
 ## 📬 Contact
 
